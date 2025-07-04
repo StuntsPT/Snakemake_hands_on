@@ -1,1 +1,5 @@
-bootstrap_replicates: 500
+samples:
+  - pal
+input_dir: "data/"
+output_dir: "outputs/"
+bootstrap: 100
