@@ -1,0 +1,55 @@
+configfile: "config/config.yml"
+
+rule all:
+    input:
+        expand("data/{sample}.fasta", sample=config["samples"]),
+        expand("outputs/{sample}_aligned.fasta", sample=config["samples"]),
+        expand("outputs/{sample}_modeltest.out", sample=config["samples"]),
+        expand("outputs/{sample}.raxml.support", sample=config["samples"]),
+        expand("outputs/{sample}_tree.pdf", sample=config["samples"])
+
+rule align:
+    input:
+        expand("data/{sample}.fasta", sample=config["samples"])
+    output:
+        expand("outputs/{sample}_aligned.fasta", sample=config["samples"])
+    conda:
+        "envs/mafft.yml"
+    shell:
+        "mafft {input} > {output}"
+
+rule model:
+    input:
+        expand("outputs/{sample}_aligned.fasta", sample=config["samples"])
+    output:
+        expand("outputs/{sample}_modeltest.out", sample=config["samples"])
+    conda:
+        "envs/modeltest.yml"
+    run:
+        real_output = output
+        cmd = f"modeltest-ng -i {input} -o {real_output[:-4]}"
+        shell(cmd)
+
+rule tree_inference:
+    input:
+        faste = expand("outputs/{sample}_modeltest.out", sample=config["samples"]),
+        model_text = expand("outputs/{sample}_modeltest.out", sample=config["samples"])
+    output:
+        expand("outputs/{sample}.raxml.support", sample=config["samples"])
+    conda:
+        "envs/raxml.yml"
+    run:
+        import scripts.get_model
+        model = scripts.get_model({input.model_text})
+        cmd = "raxml-ng --all --msa {input.fasta} --model {model} --prefix {output[-14]} --bs-trees {config['bootstrap']}"
+        shell(cmd)
+
+rule figtree:
+    input:
+        expand("outputs/{sample}.raxml.support", sample=config["samples"])
+    output:
+        expand("outputs/{sample}_tree.pdf", sample=config["samples"])
+    conda:
+        "envs/figtree.yml"
+    shell:
+        "figtree -graphic PDF {input} {output}"
