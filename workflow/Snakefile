@@ -12,7 +12,7 @@ rule align:
     input:
         expand("data/{sample}.fasta", sample=config["samples"])
     output:
-        expand("outputs/{sample}_aligned.fasta", sample=config["samples"])
+        "outputs/{sample}_aligned.fasta"
     conda:
         "envs/mafft.yml"
     shell:
@@ -22,33 +22,43 @@ rule model:
     input:
         expand("outputs/{sample}_aligned.fasta", sample=config["samples"])
     output:
-        expand("outputs/{sample}_modeltest.out", sample=config["samples"])
+        model = "outputs/{sample}_modeltest.out"
     conda:
         "envs/modeltest.yml"
+    params:
+        output_prefix = subpath(output.model, ".out")
+    shell:
+        "modeltest-ng -i {input} -o {params.output_prefix}"
+
+rule parse_model:
+    input:
+        expand("outputs/{sample}_modeltest.out", sample=config["samples"])
+    output:
+        "outputs/{sample}_my_model.txt"
     run:
-        real_output = output
-        cmd = f"modeltest-ng -i {input} -o {real_output[:-4]}"
-        shell(cmd)
+        import scripts.get_model
+        my_model = scripts.get_model.parse_modeltest(str(input))
+        with open(str(output), "w") as my_output:
+            my_output.write(f"{my_model}\n")
 
 rule tree_inference:
     input:
-        faste = expand("outputs/{sample}_modeltest.out", sample=config["samples"]),
-        model_text = expand("outputs/{sample}_modeltest.out", sample=config["samples"])
+        fasta = expand("outputs/{sample}_aligned.fasta", sample=config["samples"]),
+        model_text = expand("outputs/{sample}_my_model.txt", sample=config["samples"])
     output:
-        expand("outputs/{sample}.raxml.support", sample=config["samples"])
+        support = "outputs/{sample}.raxml.support"
     conda:
         "envs/raxml.yml"
-    run:
-        import scripts.get_model
-        model = scripts.get_model({input.model_text})
-        cmd = "raxml-ng --all --msa {input.fasta} --model {model} --prefix {output[-14]} --bs-trees {config['bootstrap']}"
-        shell(cmd)
+    params:
+        output_prefix = subpath(output.support, ".raxml.support")
+    shell:
+        "raxml-ng --all --msa {input.fasta} --model $(cat {input.model_text}) --prefix {params.output_prefix} --bs-trees {config[bootstrap]}"
 
 rule figtree:
     input:
         expand("outputs/{sample}.raxml.support", sample=config["samples"])
     output:
-        expand("outputs/{sample}_tree.pdf", sample=config["samples"])
+        "outputs/{sample}_tree.pdf"
     conda:
         "envs/figtree.yml"
     shell:
