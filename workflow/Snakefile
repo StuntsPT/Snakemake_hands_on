@@ -2,15 +2,15 @@ configfile: "config/config.yml"
 
 rule all:
     input:
-        expand("data/{sample}.fasta", sample=config["samples"]),
         expand("outputs/{sample}_aligned.fasta", sample=config["samples"]),
         expand("outputs/{sample}_modeltest.out", sample=config["samples"]),
+        expand("outputs/{sample}_my_model.txt", sample=config["samples"]),
         expand("outputs/{sample}.raxml.support", sample=config["samples"]),
         expand("outputs/{sample}_tree.pdf", sample=config["samples"])
 
 rule align:
     input:
-        expand("data/{sample}.fasta", sample=config["samples"])
+        "data/{sample}.fasta"
     output:
         "outputs/{sample}_aligned.fasta"
     conda:
@@ -20,7 +20,7 @@ rule align:
 
 rule model:
     input:
-        expand("outputs/{sample}_aligned.fasta", sample=config["samples"])
+        "outputs/{sample}_aligned.fasta"
     output:
         model = "outputs/{sample}_modeltest.out"
     conda:
@@ -32,19 +32,19 @@ rule model:
 
 rule parse_model:
     input:
-        expand("outputs/{sample}_modeltest.out", sample=config["samples"])
+        full_text = "outputs/{sample}_modeltest.out"
     output:
-        "outputs/{sample}_my_model.txt"
+        short_text = "outputs/{sample}_my_model.txt"
     run:
-        import scripts.get_model
-        my_model = scripts.get_model.parse_modeltest(str(input))
-        with open(str(output), "w") as my_output:
+        from scripts.get_model import parse_modeltest
+        my_model = parse_modeltest(input.full_text)
+        with open(output.short_text, "w") as my_output:
             my_output.write(f"{my_model}\n")
 
 rule tree_inference:
     input:
-        fasta = expand("outputs/{sample}_aligned.fasta", sample=config["samples"]),
-        model_text = expand("outputs/{sample}_my_model.txt", sample=config["samples"])
+        fasta = "outputs/{sample}_aligned.fasta",
+        model_text = "outputs/{sample}_my_model.txt"
     output:
         support = "outputs/{sample}.raxml.support"
     conda:
@@ -56,10 +56,11 @@ rule tree_inference:
 
 rule figtree:
     input:
-        expand("outputs/{sample}.raxml.support", sample=config["samples"])
+        "outputs/{sample}.raxml.support"
     output:
         "outputs/{sample}_tree.pdf"
     conda:
         "envs/figtree.yml"
     shell:
-        "figtree -graphic PDF {input} {output}"
+        "figtree -graphic PNG {input} {output}"
+
